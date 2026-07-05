@@ -153,7 +153,7 @@ export function CommitteeManagerPage() {
             no_wa: cleanedWa && isValidWhatsAppNumber(cleanedWa) ? cleanedWa : null,
             template_id: batchTemplateId || null
           };
-        }).filter(Boolean); // Buang yang null
+        }).filter((item): item is NonNullable<typeof item> => item !== null);
 
         if (toInsert.length === 0) {
           throw new Error('Tidak ada data valid yang ditemukan. Pastikan kolom Nama dan Jabatan ada.');

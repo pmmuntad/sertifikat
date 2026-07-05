@@ -15,6 +15,7 @@ export function EventListPage() {
 
   useEffect(() => {
     if (!organization) return;
+    const org = organization; // ⬅️ tambahkan ini — TS akan infer org sebagai non-null
     let active = true;
 
     async function load() {
@@ -22,7 +23,7 @@ export function EventListPage() {
       const { data, error } = await supabase
         .from('events')
         .select('*')
-        .eq('organization_id', organization.id)
+        .eq('organization_id', org.id) // ⬅️ ganti organization.id -> org.id
         .order('created_at', { ascending: false });
 
       if (!active) return;
