@@ -6,3 +6,6 @@ dist
 *.log
 .vercel
 supabase/.temp
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
