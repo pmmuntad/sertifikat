@@ -51,6 +51,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // Debug: log hasil mentah supaya mudah dicek lewat DevTools Console kalau
+    // ada masalah "membership row ada tapi organisasi tidak muncul" (biasanya
+    // indikasi RLS memblokir join ke tabel organizations).
+    // eslint-disable-next-line no-console
+    console.debug('[AuthContext] organization_members raw result:', data);
+
+    const rowsWithoutOrgJoin = (data ?? []).filter((row) => !row.organizations);
+    if (rowsWithoutOrgJoin.length > 0) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[AuthContext] Ditemukan baris organization_members TANPA data organisasi (kemungkinan RLS memblokir SELECT ke tabel organizations, atau organization_id tidak valid):',
+        rowsWithoutOrgJoin
+      );
+    }
+
     const orgs: CurrentOrganization[] = (data ?? [])
       .filter((row) => row.organizations)
       .map((row) => {
@@ -68,6 +83,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (orgs.length === 0) {
       setOrganization(null);
+      if (rowsWithoutOrgJoin.length > 0) {
+        setError(
+          `Ditemukan ${rowsWithoutOrgJoin.length} baris keanggotaan organisasi, namun data organisasinya tidak bisa diambil (kemungkinan RLS SELECT policy pada tabel 'organizations' memblokir, atau organization_id tidak valid). Buka DevTools Console untuk detail.`
+        );
+      } else if ((data ?? []).length === 0) {
+        setError(null); // benar-benar belum ada membership sama sekali, bukan error
+      }
       return;
     }
 

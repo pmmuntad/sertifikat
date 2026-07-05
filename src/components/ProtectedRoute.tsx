@@ -28,7 +28,7 @@ export function ProtectedRoute() {
 
 /** Guard tambahan: kalau user login tapi belum jadi member organisasi manapun. */
 export function RequireOrganization() {
-  const { organization, memberships, loading } = useAuth();
+  const { organization, memberships, loading, error, user, refreshMemberships } = useAuth();
 
   if (loading) {
     return (
@@ -43,9 +43,21 @@ export function RequireOrganization() {
       <div className="centered-loading">
         <h2>Belum ada akses organisasi</h2>
         <p>
-          Akun Anda belum terdaftar sebagai anggota lembaga manapun. Silakan hubungi admin
-          platform untuk didaftarkan ke organisasi Anda.
+          Akun Anda ({user?.email}) belum terdaftar sebagai anggota lembaga manapun, atau data
+          organisasinya gagal dimuat. Silakan hubungi admin platform untuk didaftarkan ke
+          organisasi Anda.
         </p>
+        {error && (
+          <p className="form-error" style={{ maxWidth: 480 }}>
+            Detail teknis: {error}
+          </p>
+        )}
+        <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+          User ID Anda: <code>{user?.id}</code>
+        </p>
+        <button className="secondary" onClick={() => refreshMemberships()}>
+          Coba Muat Ulang
+        </button>
       </div>
     );
   }
