@@ -253,5 +253,24 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['organization_usage']['Row']>;
       };
     };
+    Views: {
+      [_ in never]: never;
+    };
+    Functions: {
+      increment_manual_retry: {
+        Args: { p_certificate_id: string };
+        Returns: void;
+      };
+    };
+    Enums: {
+      form_field_type: FormFieldType;
+      certificate_recipient_type: CertificateRecipientType;
+      wa_delivery_status: WaDeliveryStatus;
+      org_role: OrgRole;
+      org_plan: OrgPlan;
+    };
+    CompositeTypes: {
+      [_ in never]: never;
+    };
   };
 }

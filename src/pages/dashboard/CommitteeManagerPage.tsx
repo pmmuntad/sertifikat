@@ -46,6 +46,7 @@ export function CommitteeManagerPage() {
   }, [eventId]);
 
   async function load() {
+    if (!eventId) return;
     setLoading(true);
     const [membersRes, templatesRes] = await Promise.all([
       supabase.from('committee_members').select('*').eq('event_id', eventId).order('created_at', { ascending: false }),
@@ -152,7 +153,7 @@ export function CommitteeManagerPage() {
             no_wa: cleanedWa && isValidWhatsAppNumber(cleanedWa) ? cleanedWa : null,
             template_id: batchTemplateId || null
           };
-        }).filter(Boolean); // Buang yang null
+        }).filter((row): row is NonNullable<typeof row> => row !== null); // Buang yang null
 
         if (toInsert.length === 0) {
           throw new Error('Tidak ada data valid yang ditemukan. Pastikan kolom Nama dan Jabatan ada.');

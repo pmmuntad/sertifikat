@@ -35,6 +35,7 @@ export function LiveMonitorPage() {
   }, [eventId]);
 
   async function load() {
+    if (!eventId) return;
     setLoading(true);
     const [eventRes, certsRes] = await Promise.all([
       supabase.from('events').select('*').eq('id', eventId).single(),

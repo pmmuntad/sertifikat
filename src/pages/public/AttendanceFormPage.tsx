@@ -56,6 +56,7 @@ export function AttendanceFormPage() {
   }, [eventId]);
 
   async function load() {
+    if (!eventId) return;
     setLoading(true);
     const [eventRes, fieldsRes] = await Promise.all([
       supabase.from('events').select('*').eq('id', eventId).single(),

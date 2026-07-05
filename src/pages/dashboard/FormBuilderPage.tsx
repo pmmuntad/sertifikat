@@ -43,6 +43,7 @@ export function FormBuilderPage() {
   }, [eventId]);
 
   async function load() {
+    if (!eventId) return;
     setLoading(true);
     const { data } = await supabase
       .from('event_form_fields')

@@ -19,6 +19,7 @@ export function EventDetailPage() {
   }, [eventId]);
 
   async function load() {
+    if (!eventId) return;
     setLoading(true);
     const { data } = await supabase.from('events').select('*').eq('id', eventId).single();
     setEvent(data ?? null);
