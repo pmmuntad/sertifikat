@@ -24,6 +24,7 @@ export function ProjectorPage() {
   }, [eventId]);
 
   async function init() {
+    if (!eventId) return;
     const { data } = await supabase.from('events').select('*').eq('id', eventId).single();
     setEvent(data ?? null);
     if (!data) return;

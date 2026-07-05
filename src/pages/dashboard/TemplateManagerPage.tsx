@@ -44,6 +44,7 @@ export function TemplateManagerPage() {
   }, [eventId]);
 
   async function load() {
+    if (!eventId) return;
     setLoading(true);
     const { data } = await supabase
       .from('certificate_templates')

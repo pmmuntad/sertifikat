@@ -46,6 +46,7 @@ export function CommitteeManagerPage() {
   }, [eventId]);
 
   async function load() {
+    if (!eventId) return;
     setLoading(true);
     const [membersRes, templatesRes] = await Promise.all([
       supabase.from('committee_members').select('*').eq('event_id', eventId).order('created_at', { ascending: false }),

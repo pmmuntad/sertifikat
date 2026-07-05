@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { APP_BASE_URL } from '@/lib/supabaseClient';
 import type { Database } from '@/lib/database.types';
+import { ArrowLeft } from 'lucide-react';
 
 type EventRow = Database['public']['Tables']['events']['Row'];
 
 export function EventDetailPage() {
   const { eventId } = useParams();
+  const navigate = useNavigate();
   const [event, setEvent] = useState<EventRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingLock, setSavingLock] = useState(false);
@@ -19,6 +21,7 @@ export function EventDetailPage() {
   }, [eventId]);
 
   async function load() {
+    if (!eventId) return;
     setLoading(true);
     const { data } = await supabase.from('events').select('*').eq('id', eventId).single();
     setEvent(data ?? null);
@@ -68,7 +71,7 @@ export function EventDetailPage() {
           <path d="M9.5 9.5l5 5M14.5 9.5l-5 5" strokeLinecap="round" />
         </svg>
         <p>Acara tidak ditemukan.</p>
-        <Link to="/dashboard/events">
+        <Link to="/dashboard">
           <button className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
             Kembali ke Daftar Acara
           </button>
@@ -118,6 +121,13 @@ export function EventDetailPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6">
+      <button
+        onClick={() => navigate('/dashboard')}
+        className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 shadow-sm transition hover:bg-gray-50"
+      >
+        <ArrowLeft className="h-4 w-4" /> Kembali ke Daftar Acara
+      </button>
+
       {/* Header */}
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">

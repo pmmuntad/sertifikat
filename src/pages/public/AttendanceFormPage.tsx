@@ -5,6 +5,18 @@ import { cleanWhatsAppNumber, isValidWhatsAppNumber } from '@/lib/whatsapp';
 import { getCurrentPosition } from '@/lib/geolocation';
 import { triggerDownload } from '@/lib/download';
 import type { Database } from '@/lib/database.types';
+import {
+  Sparkles,
+  Lock,
+  AlertCircle,
+  MapPin,
+  Loader2,
+  PartyPopper,
+  Download,
+  User,
+  Phone,
+  Mail,
+} from 'lucide-react';
 
 type EventRow = Database['public']['Tables']['events']['Row'];
 type FieldRow = Database['public']['Tables']['event_form_fields']['Row'];
@@ -51,11 +63,16 @@ export function AttendanceFormPage() {
     load();
     // Minta izin lokasi lebih awal (paralel, tidak menghalangi pengisian form).
     getCurrentPosition()
-      .then(() => setLocationHint('Lokasi terdeteksi ✓'))
+      .then(() => setLocationHint('Lokasi terdeteksi'))
       .catch((e) => setLocationHint((e as Error).message));
   }, [eventId]);
 
   async function load() {
+    if (!eventId) {
+      setNotFound(true);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const [eventRes, fieldsRes] = await Promise.all([
       supabase.from('events').select('*').eq('id', eventId).single(),
@@ -156,151 +173,247 @@ export function AttendanceFormPage() {
     }
   }
 
+  // ============ Loading ============
   if (loading) {
     return (
-      <div className="public-page">
-        <div className="public-card"><p>Memuat...</p></div>
-      </div>
+      <PageShell>
+        <div className="flex flex-col items-center gap-3 py-10">
+          <Loader2 className="h-7 w-7 animate-spin text-indigo-600" />
+          <p className="text-sm text-gray-500">Memuat acara...</p>
+        </div>
+      </PageShell>
     );
   }
 
+  // ============ Not found ============
   if (notFound || !event) {
     return (
-      <div className="public-page">
-        <div className="public-card"><h2>Acara tidak ditemukan</h2></div>
-      </div>
+      <PageShell>
+        <div className="flex flex-col items-center gap-2 py-8 text-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400">
+            <AlertCircle className="h-7 w-7" />
+          </span>
+          <h2 className="text-lg font-bold text-gray-900">Acara tidak ditemukan</h2>
+          <p className="text-sm text-gray-500">Tautan yang Anda buka mungkin sudah tidak berlaku.</p>
+        </div>
+      </PageShell>
     );
   }
 
+  // ============ Locked ============
   if (event.is_locked) {
     return (
-      <div className="public-page">
-        <div className="public-card">
-          <h2>Absensi Ditutup</h2>
-          <p>Sesi absensi untuk acara ini sudah dikunci oleh penyelenggara.</p>
+      <PageShell>
+        <div className="flex flex-col items-center gap-2 py-8 text-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-red-500">
+            <Lock className="h-7 w-7" />
+          </span>
+          <h2 className="text-lg font-bold text-gray-900">Absensi Ditutup</h2>
+          <p className="text-sm text-gray-500">Sesi absensi untuk acara ini sudah dikunci oleh penyelenggara.</p>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
+  // ============ Success ============
   if (submitState === 'success') {
     return (
-      <div className="public-page">
-        <div className="public-card">
-          <h2>🎉 Absensi Berhasil</h2>
-          <p className="form-success">{submitMessage}</p>
+      <PageShell>
+        <div className="flex flex-col items-center gap-3 py-6 text-center">
+          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-500">
+            <PartyPopper className="h-8 w-8" />
+          </span>
+          <h2 className="text-xl font-bold text-gray-900">Absensi Berhasil</h2>
+          <p className="text-sm leading-relaxed text-gray-600">{submitMessage}</p>
           {certificateUrl && (
-            <a href={certificateUrl} target="_blank" rel="noopener noreferrer">
-              <button style={{ width: '100%', marginTop: 8 }}>Buka / Unduh Ulang Sertifikat</button>
+            <a href={certificateUrl} target="_blank" rel="noopener noreferrer" className="mt-2 w-full">
+              <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700">
+                <Download className="h-4 w-4" /> Buka / Unduh Ulang Sertifikat
+              </button>
             </a>
           )}
         </div>
-      </div>
+      </PageShell>
     );
   }
 
+  // ============ Form ============
   const customFields = fields.filter((f) => !f.fixed);
 
   return (
-    <div className="public-page">
-      <div className="public-card">
-        <h2>{event.name}</h2>
-        <p style={{ color: 'var(--text-muted)' }}>Isi data berikut untuk absen &amp; ambil sertifikat.</p>
+    <PageShell>
+      <div className="mb-5 text-center">
+        <h2 className="text-lg font-bold text-gray-900 sm:text-xl">{event.name}</h2>
+        <p className="mt-1 text-sm text-gray-500">Isi data berikut untuk absen &amp; ambil sertifikat.</p>
+      </div>
 
-        <form onSubmit={handleSubmit}>
-          <label>
-            Nama Lengkap &amp; Gelar
-            <input value={namaLengkap} onChange={(e) => setNamaLengkap(e.target.value)} required />
-          </label>
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+        <FieldWrapper label="Nama Lengkap & Gelar" icon={<User className="h-4 w-4" />}>
+          <input
+            value={namaLengkap}
+            onChange={(e) => setNamaLengkap(e.target.value)}
+            required
+            placeholder="Nama sesuai yang ingin tercetak di sertifikat"
+            className="w-full rounded-xl border border-gray-300 px-3.5 py-3 text-sm focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-600/20"
+          />
+        </FieldWrapper>
 
-          <label>
-            No. WhatsApp
-            <input
-              value={noWa}
-              onChange={(e) => setNoWa(e.target.value)}
-              placeholder="08xxxxxxxxxx"
-              required
-              inputMode="numeric"
-            />
-            {waError && <span className="form-error">{waError}</span>}
-          </label>
+        <FieldWrapper label="No. WhatsApp" icon={<Phone className="h-4 w-4" />}>
+          <input
+            value={noWa}
+            onChange={(e) => setNoWa(e.target.value)}
+            placeholder="08xxxxxxxxxx"
+            required
+            inputMode="numeric"
+            className="w-full rounded-xl border border-gray-300 px-3.5 py-3 text-sm focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-600/20"
+          />
+          {waError && <p className="mt-1.5 text-xs text-red-600">{waError}</p>}
+        </FieldWrapper>
 
-          <label>
-            Email (opsional)
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          </label>
+        <FieldWrapper label="Email" optional icon={<Mail className="h-4 w-4" />}>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full rounded-xl border border-gray-300 px-3.5 py-3 text-sm focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-600/20"
+          />
+        </FieldWrapper>
 
-          {customFields.map((field) => (
-            <div key={field.id}>
-              {field.type === 'text' && (
-                <label>
-                  {field.label}
-                  <input
-                    required={field.required}
-                    onChange={(e) => updateAnswer(field.key, e.target.value)}
-                  />
-                </label>
-              )}
-              {field.type === 'textarea' && (
-                <label>
-                  {field.label}
-                  <textarea
-                    required={field.required}
-                    rows={3}
-                    onChange={(e) => updateAnswer(field.key, e.target.value)}
-                  />
-                </label>
-              )}
-              {field.type === 'select' && (
-                <label>
-                  {field.label}
-                  <select required={field.required} onChange={(e) => updateAnswer(field.key, e.target.value)}>
-                    <option value="">— Pilih —</option>
-                    {(field.options ?? []).map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              {field.type === 'checkbox' && (
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 6 }}>{field.label}</div>
+        {customFields.map((field) => (
+          <div key={field.id}>
+            {field.type === 'text' && (
+              <FieldWrapper label={field.label} optional={!field.required}>
+                <input
+                  required={field.required}
+                  onChange={(e) => updateAnswer(field.key, e.target.value)}
+                  className="w-full rounded-xl border border-gray-300 px-3.5 py-3 text-sm focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-600/20"
+                />
+              </FieldWrapper>
+            )}
+            {field.type === 'textarea' && (
+              <FieldWrapper label={field.label} optional={!field.required}>
+                <textarea
+                  required={field.required}
+                  rows={3}
+                  onChange={(e) => updateAnswer(field.key, e.target.value)}
+                  className="w-full resize-none rounded-xl border border-gray-300 px-3.5 py-3 text-sm focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-600/20"
+                />
+              </FieldWrapper>
+            )}
+            {field.type === 'select' && (
+              <FieldWrapper label={field.label} optional={!field.required}>
+                <select
+                  required={field.required}
+                  onChange={(e) => updateAnswer(field.key, e.target.value)}
+                  className="w-full rounded-xl border border-gray-300 px-3.5 py-3 text-sm focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-600/20"
+                >
+                  <option value="">— Pilih —</option>
                   {(field.options ?? []).map((opt) => (
-                    <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400 }}>
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </FieldWrapper>
+            )}
+            {field.type === 'checkbox' && (
+              <div className="mb-1">
+                <p className="mb-2 text-sm font-medium text-gray-700">
+                  {field.label} {!field.required && <span className="font-normal text-gray-400">(opsional)</span>}
+                </p>
+                <div className="space-y-2 rounded-xl border border-gray-200 p-3">
+                  {(field.options ?? []).map((opt) => (
+                    <label key={opt} className="flex items-center gap-2.5 text-sm text-gray-700">
                       <input
                         type="checkbox"
-                        style={{ width: 'auto' }}
                         onChange={(e) => updateCheckbox(field.key, opt, e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
                       />
                       {opt}
                     </label>
                   ))}
                 </div>
-              )}
-              {field.type === 'file' && (
-                <label>
-                  {field.label}
-                  <input
-                    type="file"
-                    accept={(field.accept_file_types ?? []).join(',')}
-                    required={field.required}
-                    onChange={(e) => setFiles((prev) => ({ ...prev, [field.key]: e.target.files?.[0] ?? null }))}
-                  />
-                </label>
-              )}
-            </div>
-          ))}
+              </div>
+            )}
+            {field.type === 'file' && (
+              <FieldWrapper label={field.label} optional={!field.required}>
+                <input
+                  type="file"
+                  accept={(field.accept_file_types ?? []).join(',')}
+                  required={field.required}
+                  onChange={(e) => setFiles((prev) => ({ ...prev, [field.key]: e.target.files?.[0] ?? null }))}
+                  className="block w-full rounded-xl border border-gray-300 bg-gray-50 p-2 text-sm text-gray-500 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-indigo-700"
+                />
+              </FieldWrapper>
+            )}
+          </div>
+        ))}
 
-          {locationHint && <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{locationHint}</p>}
-          {submitState === 'error' && <p className="form-error">{submitMessage}</p>}
+        {locationHint && (
+          <p className="flex items-center gap-1.5 text-xs text-gray-400">
+            <MapPin className="h-3.5 w-3.5" /> {locationHint}
+          </p>
+        )}
 
-          <button type="submit" disabled={submitState === 'submitting'} style={{ width: '100%' }}>
-            {submitState === 'submitting' ? 'Memproses...' : 'Hadir & Ambil Sertifikat'}
-          </button>
-        </form>
+        {submitState === 'error' && (
+          <div className="flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-700">
+            <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+            {submitMessage}
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={submitState === 'submitting'}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition hover:from-indigo-700 hover:to-purple-700 disabled:cursor-not-allowed disabled:opacity-60 active:scale-[0.99]"
+        >
+          {submitState === 'submitting' ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" /> Memproses...
+            </>
+          ) : (
+            'Hadir & Ambil Sertifikat'
+          )}
+        </button>
+      </form>
+    </PageShell>
+  );
+}
+
+function PageShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-screen flex-col items-center bg-gray-50 px-4 py-8 sm:py-12">
+      <div className="mb-5 flex items-center gap-2">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-purple-700">
+          <Sparkles className="h-4 w-4 text-white" />
+        </span>
+        <span className="text-sm font-bold tracking-tight text-gray-700">SertifikatLive</span>
       </div>
+      <div className="w-full max-w-md rounded-2xl border border-gray-100 bg-white p-5 shadow-xl shadow-gray-200/50 sm:p-7">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function FieldWrapper({
+  label,
+  children,
+  optional,
+  icon,
+}: {
+  label: string;
+  children: React.ReactNode;
+  optional?: boolean;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-gray-700">
+        {icon}
+        {label} {optional && <span className="font-normal text-gray-400">(opsional)</span>}
+      </label>
+      {children}
     </div>
   );
 }

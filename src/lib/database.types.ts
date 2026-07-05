@@ -2,7 +2,15 @@
 // Ini bukan hasil auto-generate `supabase gen types` — sebaiknya generate ulang
 // setelah migration dijalankan dengan:
 //   npx supabase gen types typescript --project-id <project-id> > src/lib/database.types.ts
-// File ini dibuat manual sebagai starting point agar app tetap type-safe sebelum itu.
+//
+// PENTING: setiap Table WAJIB menyertakan properti `Relationships` (meskipun
+// kosong `[]`), dan Database WAJIB menyertakan `Views`, `Functions`, `Enums`,
+// `CompositeTypes` -- ini adalah kontrak generic yang dibutuhkan oleh
+// @supabase/supabase-js versi terbaru (lihat GenericSchema/GenericTable di
+// node_modules/@supabase/postgrest-js). Tanpa properti-properti ini,
+// TypeScript akan diam-diam menolak constraint generic dan fallback ke
+// `never` di seluruh hasil query .from(...) -- yang menyebabkan error seperti
+// "Property 'x' does not exist on type 'never'" di banyak file berbeda.
 
 export type FormFieldType = 'text' | 'textarea' | 'select' | 'checkbox' | 'file';
 export type CertificateRecipientType = 'peserta' | 'panitia';
@@ -29,6 +37,7 @@ export interface Database {
           slug: string;
         };
         Update: Partial<Database['public']['Tables']['organizations']['Row']>;
+        Relationships: [];
       };
       organization_members: {
         Row: {
@@ -43,6 +52,15 @@ export interface Database {
           user_id: string;
         };
         Update: Partial<Database['public']['Tables']['organization_members']['Row']>;
+        Relationships: [
+          {
+            foreignKeyName: 'organization_members_organization_id_fkey';
+            columns: ['organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       events: {
         Row: {
@@ -68,6 +86,22 @@ export interface Database {
           name: string;
         };
         Update: Partial<Database['public']['Tables']['events']['Row']>;
+        Relationships: [
+          {
+            foreignKeyName: 'events_organization_id_fkey';
+            columns: ['organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'events_wa_session_id_fkey';
+            columns: ['wa_session_id'];
+            isOneToOne: false;
+            referencedRelation: 'whatsapp_sessions';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       event_form_fields: {
         Row: {
@@ -92,6 +126,15 @@ export interface Database {
           type: FormFieldType;
         };
         Update: Partial<Database['public']['Tables']['event_form_fields']['Row']>;
+        Relationships: [
+          {
+            foreignKeyName: 'event_form_fields_event_id_fkey';
+            columns: ['event_id'];
+            isOneToOne: false;
+            referencedRelation: 'events';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       submissions: {
         Row: {
@@ -115,6 +158,15 @@ export interface Database {
           no_wa: string;
         };
         Update: Partial<Database['public']['Tables']['submissions']['Row']>;
+        Relationships: [
+          {
+            foreignKeyName: 'submissions_event_id_fkey';
+            columns: ['event_id'];
+            isOneToOne: false;
+            referencedRelation: 'events';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       certificate_templates: {
         Row: {
@@ -134,6 +186,15 @@ export interface Database {
           file_path: string;
         };
         Update: Partial<Database['public']['Tables']['certificate_templates']['Row']>;
+        Relationships: [
+          {
+            foreignKeyName: 'certificate_templates_event_id_fkey';
+            columns: ['event_id'];
+            isOneToOne: false;
+            referencedRelation: 'events';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       committee_members: {
         Row: {
@@ -154,6 +215,22 @@ export interface Database {
           jabatan: string;
         };
         Update: Partial<Database['public']['Tables']['committee_members']['Row']>;
+        Relationships: [
+          {
+            foreignKeyName: 'committee_members_event_id_fkey';
+            columns: ['event_id'];
+            isOneToOne: false;
+            referencedRelation: 'events';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'committee_members_template_id_fkey';
+            columns: ['template_id'];
+            isOneToOne: false;
+            referencedRelation: 'certificate_templates';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       signatures: {
         Row: {
@@ -170,6 +247,15 @@ export interface Database {
           file_path: string;
         };
         Update: Partial<Database['public']['Tables']['signatures']['Row']>;
+        Relationships: [
+          {
+            foreignKeyName: 'signatures_event_id_fkey';
+            columns: ['event_id'];
+            isOneToOne: false;
+            referencedRelation: 'events';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       certificates: {
         Row: {
@@ -203,6 +289,29 @@ export interface Database {
           file_path: string;
         };
         Update: Partial<Database['public']['Tables']['certificates']['Row']>;
+        Relationships: [
+          {
+            foreignKeyName: 'certificates_event_id_fkey';
+            columns: ['event_id'];
+            isOneToOne: false;
+            referencedRelation: 'events';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'certificates_template_id_fkey';
+            columns: ['template_id'];
+            isOneToOne: false;
+            referencedRelation: 'certificate_templates';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'certificates_committee_member_id_fkey';
+            columns: ['committee_member_id'];
+            isOneToOne: false;
+            referencedRelation: 'committee_members';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       whatsapp_sessions: {
         Row: {
@@ -220,6 +329,15 @@ export interface Database {
           label: string;
         };
         Update: Partial<Database['public']['Tables']['whatsapp_sessions']['Row']>;
+        Relationships: [
+          {
+            foreignKeyName: 'whatsapp_sessions_organization_id_fkey';
+            columns: ['organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       qr_tokens: {
         Row: {
@@ -237,6 +355,15 @@ export interface Database {
           expires_at: string;
         };
         Update: Partial<Database['public']['Tables']['qr_tokens']['Row']>;
+        Relationships: [
+          {
+            foreignKeyName: 'qr_tokens_event_id_fkey';
+            columns: ['event_id'];
+            isOneToOne: false;
+            referencedRelation: 'events';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       organization_usage: {
         Row: {
@@ -251,7 +378,37 @@ export interface Database {
           month: string;
         };
         Update: Partial<Database['public']['Tables']['organization_usage']['Row']>;
+        Relationships: [
+          {
+            foreignKeyName: 'organization_usage_organization_id_fkey';
+            columns: ['organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
       };
     };
+    Views: Record<string, never>;
+    Functions: {
+      next_certificate_number: {
+        Args: { p_organization_id: string; p_year?: string };
+        Returns: string;
+      };
+      increment_manual_retry: {
+        Args: { p_certificate_id: string };
+        Returns: undefined;
+      };
+      is_org_member: {
+        Args: { p_organization_id: string };
+        Returns: boolean;
+      };
+      is_platform_admin: {
+        Args: Record<PropertyKey, never>;
+        Returns: boolean;
+      };
+    };
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
   };
 }

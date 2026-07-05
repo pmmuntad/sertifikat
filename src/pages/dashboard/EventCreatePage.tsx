@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/context/AuthContext';
 import { DEFAULT_WA_MESSAGE_TEMPLATE } from '@/lib/templateRenderer';
 import { FIXED_FIELDS } from '@/lib/formTypes';
+import { ArrowLeft, Loader2, QrCode, FileSpreadsheet, AlertCircle } from 'lucide-react';
 
 export function EventCreatePage() {
   const { organization, user } = useAuth();
@@ -66,57 +67,142 @@ export function EventCreatePage() {
   }
 
   return (
-    <div className="card" style={{ maxWidth: 560 }}>
-      <h2>Buat Acara Baru</h2>
-      <form onSubmit={handleSubmit}>
-        <label>
-          Nama Acara
-          <input value={name} onChange={(e) => setName(e.target.value)} required />
-        </label>
+    <div className="mx-auto max-w-2xl space-y-5 p-4 sm:p-6">
+      <button
+        onClick={() => navigate(-1)}
+        className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 shadow-sm transition hover:bg-gray-50"
+      >
+        <ArrowLeft className="h-4 w-4" /> Kembali
+      </button>
 
-        <label>
-          Deskripsi (opsional)
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
-        </label>
+      <div>
+        <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">Buat Acara Baru</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          Isi detail acara Anda, lalu lanjutkan mengatur form dan template sertifikat setelah acara dibuat.
+        </p>
+      </div>
 
-        <label>
-          Mode Pendaftaran
-          <select value={mode} onChange={(e) => setMode(e.target.value as 'excel' | 'live')}>
-            <option value="live">Absensi Langsung (Scan QR, Tanpa Excel)</option>
-            <option value="excel">Upload Excel (data peserta sudah pasti)</option>
-          </select>
-        </label>
+      <form onSubmit={handleSubmit} className="space-y-5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-gray-700">Nama Acara</label>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            placeholder="Contoh: Seminar Nasional Teknologi 2026"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-600/20"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-gray-700">
+            Deskripsi <span className="font-normal text-gray-400">(opsional)</span>
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            placeholder="Deskripsi singkat acara Anda"
+            className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-600/20"
+          />
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-gray-700">Mode Pendaftaran</label>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setMode('live')}
+              className={`flex items-start gap-3 rounded-xl border p-4 text-left transition ${
+                mode === 'live'
+                  ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <span
+                className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${
+                  mode === 'live' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-500'
+                }`}
+              >
+                <QrCode className="h-[18px] w-[18px]" />
+              </span>
+              <span>
+                <p className="text-sm font-semibold text-gray-900">Absensi Langsung</p>
+                <p className="text-xs text-gray-500">Scan QR di lokasi, tanpa Excel</p>
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMode('excel')}
+              className={`flex items-start gap-3 rounded-xl border p-4 text-left transition ${
+                mode === 'excel'
+                  ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <span
+                className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${
+                  mode === 'excel' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-500'
+                }`}
+              >
+                <FileSpreadsheet className="h-[18px] w-[18px]" />
+              </span>
+              <span>
+                <p className="text-sm font-semibold text-gray-900">Upload Excel</p>
+                <p className="text-xs text-gray-500">Data peserta sudah pasti</p>
+              </span>
+            </button>
+          </div>
+        </div>
 
         {mode === 'live' && (
-          <>
-            <label>
-              Interval Refresh QR (detik)
+          <div className="grid grid-cols-1 gap-4 rounded-xl bg-gray-50 p-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">Interval Refresh QR (detik)</label>
               <input
                 type="number"
                 min={5}
                 max={300}
                 value={qrInterval}
                 onChange={(e) => setQrInterval(Number(e.target.value))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-600/20"
               />
-            </label>
+            </div>
 
-            <label>
-              Radius Geofencing (meter)
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">Radius Geofencing (meter)</label>
               <input
                 type="number"
                 min={10}
                 max={1000}
                 value={radius}
                 onChange={(e) => setRadius(Number(e.target.value))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-600/20"
               />
-            </label>
-          </>
+            </div>
+          </div>
         )}
 
-        {errorMsg && <p className="form-error">{errorMsg}</p>}
+        {errorMsg && (
+          <div className="flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-700">
+            <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+            {errorMsg}
+          </div>
+        )}
 
-        <button type="submit" disabled={submitting}>
-          {submitting ? 'Menyimpan...' : 'Buat Acara'}
+        <button
+          type="submit"
+          disabled={submitting}
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {submitting ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" /> Menyimpan...
+            </>
+          ) : (
+            'Buat Acara'
+          )}
         </button>
       </form>
     </div>
