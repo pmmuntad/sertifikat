@@ -78,6 +78,8 @@ export interface Database {
           is_locked: boolean;
           wa_session_id: string | null;
           wa_message_template: string;
+          certificate_number_enabled: boolean;
+          certificate_number_format: string;
           created_by: string;
           created_at: string;
         };
@@ -177,6 +179,8 @@ export interface Database {
           jabatan: string | null;
           file_path: string;
           placeholders: Record<string, unknown>;
+          page_width: number | null;
+          page_height: number | null;
           created_at: string;
         };
         Insert: Partial<Database['public']['Tables']['certificate_templates']['Row']> & {
@@ -365,6 +369,25 @@ export interface Database {
           },
         ];
       };
+      event_certificate_counters: {
+        Row: {
+          event_id: string;
+          last_number: number;
+        };
+        Insert: Partial<Database['public']['Tables']['event_certificate_counters']['Row']> & {
+          event_id: string;
+        };
+        Update: Partial<Database['public']['Tables']['event_certificate_counters']['Row']>;
+        Relationships: [
+          {
+            foreignKeyName: 'event_certificate_counters_event_id_fkey';
+            columns: ['event_id'];
+            isOneToOne: true;
+            referencedRelation: 'events';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       organization_usage: {
         Row: {
           organization_id: string;
@@ -394,6 +417,10 @@ export interface Database {
       next_certificate_number: {
         Args: { p_organization_id: string; p_year?: string };
         Returns: string;
+      };
+      next_certificate_sequence: {
+        Args: { p_event_id: string };
+        Returns: number;
       };
       increment_manual_retry: {
         Args: { p_certificate_id: string };

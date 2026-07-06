@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from '../_shared/supabaseAdmin.ts';
 import { corsHeaders, handleCorsPreflight, jsonResponse } from '../_shared/cors.ts';
 import { computeVerificationHash } from '../_shared/verificationHash.ts';
 import { renderCertificatePdf } from '../_shared/certificatePdf.ts';
+import { formatCertificateNumber } from '../_shared/certificateNumber.ts';
 
 /**
  * Dipanggil dari dashboard dosen (tombol "Terbitkan Sertifikat" di halaman
@@ -26,7 +27,7 @@ Deno.serve(async (req) => {
 
     const { data: member, error: memberError } = await supabaseAdmin
       .from('committee_members')
-      .select('*, events(name, organization_id)')
+      .select('*, events(name, organization_id, certificate_number_enabled, certificate_number_format)')
       .eq('id', committee_member_id)
       .single();
 
@@ -37,7 +38,12 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: false, message: 'Panitia ini belum memilih template sertifikat.' }, 400);
     }
 
-    const event = member.events as unknown as { name: string; organization_id: string };
+    const event = member.events as unknown as {
+      name: string;
+      organization_id: string;
+      certificate_number_enabled: boolean;
+      certificate_number_format: string;
+    };
 
     const { data: template, error: templateError } = await supabaseAdmin
       .from('certificate_templates')
@@ -66,12 +72,16 @@ Deno.serve(async (req) => {
       }
     }
 
-    const { data: certNumberResult } = await supabaseAdmin.rpc('next_certificate_number', {
-      p_organization_id: event.organization_id,
-    });
-    const certificateNumber: string = certNumberResult as string;
-
     const certificateId = crypto.randomUUID();
+    let certificateNumber: string;
+    if (event.certificate_number_enabled) {
+      const { data: seqResult } = await supabaseAdmin.rpc('next_certificate_sequence', {
+        p_event_id: member.event_id,
+      });
+      certificateNumber = formatCertificateNumber(event.certificate_number_format, seqResult as number);
+    } else {
+      certificateNumber = `NONUM-${certificateId}`;
+    }
     const appBaseUrl = Deno.env.get('APP_BASE_URL') ?? 'https://your-app.vercel.app';
     const verificationSecret = Deno.env.get('CERTIFICATE_VERIFICATION_SECRET') ?? 'change-me';
     const sig = await computeVerificationHash(certificateId, verificationSecret);
@@ -83,16 +93,16 @@ Deno.serve(async (req) => {
     const pdfBytes = await renderCertificatePdf({
       templateImageBytes: templateBytes,
       templateImageType: isPng ? 'png' : 'jpg',
-      placeholders: template.placeholders as Record<string, { x: number; y: number; fontSize?: number; width?: number }>,
+      placeholders: template.placeholders as Record<string, { x: number; y: number; fontSize?: number; width?: number; color?: string; enabled?: boolean; align?: 'left' | 'center' | 'right' }>,
       values: {
         nama: member.nama_lengkap,
         jabatan: member.jabatan,
-        no_sertifikat: certificateNumber,
+        no_sertifikat: event.certificate_number_enabled ? certificateNumber : undefined,
         qr_verifikasi_url: verificationUrl,
         ttd_image_bytes: ttdBytes,
       },
-      pageWidth: 1000,
-      pageHeight: 700,
+      pageWidth: template.page_width ?? 1000,
+      pageHeight: template.page_height ?? 700,
     });
 
     const filePath = `${event.organization_id}/${member.event_id}/${certificateId}.pdf`;
@@ -141,7 +151,7 @@ Deno.serve(async (req) => {
 
     return jsonResponse({
       success: true,
-      certificate_number: certificateNumber,
+      certificate_number: event.certificate_number_enabled ? certificateNumber : null,
       certificate_url: signedUrlData?.signedUrl ?? null,
     });
   } catch (err) {

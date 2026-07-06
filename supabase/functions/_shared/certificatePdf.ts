@@ -4,11 +4,19 @@ import { PDFDocument, StandardFonts, rgb } from 'https://esm.sh/pdf-lib@1.17.1';
 import QRCode from 'https://esm.sh/qrcode@1.5.3';
 
 export interface PlaceholderPosition {
+  /** Koordinat X dari kiri halaman (dalam satuan point/px 1:1 dengan gambar template). */
   x: number;
+  /** Koordinat Y dari ATAS halaman (konvensi UI editor visual web, bukan konvensi pdf-lib). */
   y: number;
   fontSize?: number;
   width?: number;
   height?: number;
+  /** Warna teks dalam format hex, contoh "#000000". Hanya berlaku untuk placeholder teks. */
+  color?: string;
+  /** Kalau false, placeholder ini tidak dirender sama sekali meski ada di data. Default true. */
+  enabled?: boolean;
+  /** Perataan horizontal teks relatif terhadap titik x. Default 'left'. */
+  align?: 'left' | 'center' | 'right';
 }
 
 export interface CertificateRenderData {
@@ -27,10 +35,22 @@ export interface CertificateRenderData {
   pageHeight: number;
 }
 
+/** Ubah hex string "#rrggbb" jadi RGB pdf-lib. Fallback ke hitam kalau invalid. */
+function hexToRgb(hex: string | undefined): ReturnType<typeof rgb> {
+  if (!hex) return rgb(0, 0, 0);
+  const clean = hex.replace('#', '');
+  const bigint = parseInt(clean, 16);
+  if (isNaN(bigint) || clean.length !== 6) return rgb(0, 0, 0);
+  const r = ((bigint >> 16) & 255) / 255;
+  const g = ((bigint >> 8) & 255) / 255;
+  const b = (bigint & 255) / 255;
+  return rgb(r, g, b);
+}
+
 /**
  * Render satu sertifikat menjadi PDF: taruh gambar template sebagai background
  * penuh halaman, lalu timpa teks/QR/gambar TTD sesuai posisi placeholder yang
- * diatur dosen di Template Manager.
+ * diatur dosen di Template Editor.
  */
 export async function renderCertificatePdf(data: CertificateRenderData): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
@@ -46,58 +66,56 @@ export async function renderCertificatePdf(data: CertificateRenderData): Promise
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
   // Placeholder koordinat disimpan dengan origin kiri-atas (sesuai konvensi UI
-  // web/editor visual), sedangkan pdf-lib origin kiri-bawah — konversi Y di sini.
-  const toPdfY = (yFromTop: number) => data.pageHeight - yFromTop;
+  // web/editor visual), sedangkan pdf-lib origin kiri-bawah. Selain itu,
+  // drawText() pdf-lib menaruh `y` di garis BASELINE font, bukan di atas teks
+  // -- kalau tidak dikompensasi, teks akan terlihat lebih rendah dari titik
+  // yang diklik dosen di editor. `size * 0.8` adalah aproksimasi ascent umum
+  // untuk font Helvetica, supaya bagian ATAS teks sejajar dengan titik y yang
+  // dosen tentukan (konsisten dengan bagaimana CSS/canvas menaruh teks).
+  function toPdfBaselineY(yFromTop: number, fontSize: number): number {
+    return data.pageHeight - yFromTop - fontSize * 0.8;
+  }
 
-  if (data.placeholders.nama && data.values.nama) {
-    const p = data.placeholders.nama;
-    page.drawText(data.values.nama, {
-      x: p.x,
-      y: toPdfY(p.y),
-      size: p.fontSize ?? 28,
+  function drawPlaceholderText(key: 'nama' | 'jabatan' | 'no_sertifikat', value: string | undefined, defaultSize: number) {
+    const p = data.placeholders[key];
+    if (!p || p.enabled === false || !value) return;
+
+    const fontSize = p.fontSize ?? defaultSize;
+    const textWidth = font.widthOfTextAtSize(value, fontSize);
+
+    let x = p.x;
+    if (p.align === 'center') x = p.x - textWidth / 2;
+    else if (p.align === 'right') x = p.x - textWidth;
+
+    page.drawText(value, {
+      x,
+      y: toPdfBaselineY(p.y, fontSize),
+      size: fontSize,
       font,
-      color: rgb(0, 0, 0),
+      color: hexToRgb(p.color),
     });
   }
 
-  if (data.placeholders.jabatan && data.values.jabatan) {
-    const p = data.placeholders.jabatan;
-    page.drawText(data.values.jabatan, {
-      x: p.x,
-      y: toPdfY(p.y),
-      size: p.fontSize ?? 18,
-      font,
-      color: rgb(0, 0, 0),
-    });
-  }
+  drawPlaceholderText('nama', data.values.nama, 28);
+  drawPlaceholderText('jabatan', data.values.jabatan, 18);
+  drawPlaceholderText('no_sertifikat', data.values.no_sertifikat, 14);
 
-  if (data.placeholders.no_sertifikat && data.values.no_sertifikat) {
-    const p = data.placeholders.no_sertifikat;
-    page.drawText(data.values.no_sertifikat, {
-      x: p.x,
-      y: toPdfY(p.y),
-      size: p.fontSize ?? 14,
-      font,
-      color: rgb(0.3, 0.3, 0.3),
-    });
-  }
-
-  if (data.placeholders.ttd && data.values.ttd_image_bytes) {
-    const p = data.placeholders.ttd;
+  const ttdPlaceholder = data.placeholders.ttd;
+  if (ttdPlaceholder && ttdPlaceholder.enabled !== false && data.values.ttd_image_bytes) {
     const ttdImage = await pdfDoc.embedPng(data.values.ttd_image_bytes);
-    const w = p.width ?? 150;
-    const h = p.height ?? (w * ttdImage.height) / ttdImage.width;
-    page.drawImage(ttdImage, { x: p.x, y: toPdfY(p.y) - h, width: w, height: h });
+    const w = ttdPlaceholder.width ?? 150;
+    const h = ttdPlaceholder.height ?? (w * ttdImage.height) / ttdImage.width;
+    page.drawImage(ttdImage, { x: ttdPlaceholder.x, y: data.pageHeight - ttdPlaceholder.y - h, width: w, height: h });
   }
 
-  if (data.placeholders.qr_verifikasi && data.values.qr_verifikasi_url) {
-    const p = data.placeholders.qr_verifikasi;
+  const qrPlaceholder = data.placeholders.qr_verifikasi;
+  if (qrPlaceholder && qrPlaceholder.enabled !== false && data.values.qr_verifikasi_url) {
     const qrDataUrl: string = await QRCode.toDataURL(data.values.qr_verifikasi_url, { margin: 0 });
     const qrBase64 = qrDataUrl.split(',')[1];
     const qrBytes = Uint8Array.from(atob(qrBase64), (c) => c.charCodeAt(0));
     const qrImage = await pdfDoc.embedPng(qrBytes);
-    const size = p.width ?? 100;
-    page.drawImage(qrImage, { x: p.x, y: toPdfY(p.y) - size, width: size, height: size });
+    const size = qrPlaceholder.width ?? 100;
+    page.drawImage(qrImage, { x: qrPlaceholder.x, y: data.pageHeight - qrPlaceholder.y - size, width: size, height: size });
   }
 
   return pdfDoc.save();

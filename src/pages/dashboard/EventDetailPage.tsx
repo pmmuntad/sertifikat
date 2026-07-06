@@ -3,7 +3,8 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { APP_BASE_URL } from '@/lib/supabaseClient';
 import type { Database } from '@/lib/database.types';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
+import { formatCertificateNumber, CERTIFICATE_NUMBER_TOKENS } from '@/lib/certificateNumber';
 
 type EventRow = Database['public']['Tables']['events']['Row'];
 
@@ -15,6 +16,13 @@ export function EventDetailPage() {
   const [savingLock, setSavingLock] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // State pengaturan Nomor Sertifikat (di-sync dari `event` setiap kali data
+  // dimuat/berubah, lalu diedit lokal sebelum disimpan lewat tombol Simpan).
+  const [numberEnabled, setNumberEnabled] = useState(true);
+  const [numberFormat, setNumberFormat] = useState('{seq:4}/CERT/{year}');
+  const [savingNumber, setSavingNumber] = useState(false);
+  const [numberSaved, setNumberSaved] = useState(false);
+
   useEffect(() => {
     if (!eventId) return;
     load();
@@ -25,7 +33,31 @@ export function EventDetailPage() {
     setLoading(true);
     const { data } = await supabase.from('events').select('*').eq('id', eventId).single();
     setEvent(data ?? null);
+    if (data) {
+      setNumberEnabled(data.certificate_number_enabled);
+      setNumberFormat(data.certificate_number_format);
+    }
     setLoading(false);
+  }
+
+  async function saveNumberSettings() {
+    if (!event) return;
+    setSavingNumber(true);
+    const { data } = await supabase
+      .from('events')
+      .update({
+        certificate_number_enabled: numberEnabled,
+        certificate_number_format: numberFormat || '{seq:4}/CERT/{year}',
+      })
+      .eq('id', event.id)
+      .select()
+      .single();
+    if (data) {
+      setEvent(data);
+      setNumberSaved(true);
+      setTimeout(() => setNumberSaved(false), 2000);
+    }
+    setSavingNumber(false);
   }
 
   async function toggleLock() {
@@ -223,6 +255,71 @@ export function EventDetailPage() {
             </span>
           </div>
         </div>
+      </div>
+
+      {/* Nomor Sertifikat */}
+      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+        <h3 className="mb-1 text-base font-semibold text-gray-900">Nomor Sertifikat</h3>
+        <p className="mb-4 text-sm text-gray-500">
+          Sistem bisa menerbitkan nomor sertifikat otomatis dengan format yang Anda atur, atau
+          dimatikan sepenuhnya kalau nomor surat sudah tercetak langsung di gambar template Anda.
+        </p>
+
+        <label className="mb-4 flex items-center gap-3">
+          <input
+            type="checkbox"
+            checked={numberEnabled}
+            onChange={(e) => setNumberEnabled(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
+          />
+          <span className="text-sm font-medium text-gray-800">
+            Terbitkan nomor sertifikat otomatis
+          </span>
+        </label>
+
+        {numberEnabled && (
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">Format Nomor</label>
+              <input
+                value={numberFormat}
+                onChange={(e) => setNumberFormat(e.target.value)}
+                placeholder="{seq:4}/CERT/{year}"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 font-mono text-sm focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-600/20"
+              />
+            </div>
+
+            <div className="rounded-lg bg-gray-50 px-3 py-2.5">
+              <span className="text-xs text-gray-500">Contoh hasil: </span>
+              <span className="font-mono text-sm font-semibold text-indigo-700">
+                {formatCertificateNumber(numberFormat || '{seq:4}/CERT/{year}', 7)}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {CERTIFICATE_NUMBER_TOKENS.map((t) => (
+                <button
+                  key={t.token}
+                  type="button"
+                  title={t.desc}
+                  onClick={() => setNumberFormat((prev) => prev + t.token)}
+                  className="rounded-md border border-gray-200 bg-white px-2 py-1 font-mono text-xs text-gray-600 transition hover:bg-gray-50"
+                >
+                  {t.token}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={saveNumberSettings}
+          disabled={savingNumber}
+          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {savingNumber && <Loader2 className="h-4 w-4 animate-spin" />}
+          {savingNumber ? 'Menyimpan...' : numberSaved ? '✓ Tersimpan' : 'Simpan Pengaturan Nomor'}
+        </button>
       </div>
     </div>
   );

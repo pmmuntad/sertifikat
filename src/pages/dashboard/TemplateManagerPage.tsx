@@ -5,13 +5,30 @@ import { useAuth } from '@/context/AuthContext';
 import type { CertificateRecipientType, Database } from '@/lib/database.types';
 import { 
   ArrowLeft, Loader2, UploadCloud, Trash2, 
-  FileImage, Eye, X, Check, XCircle 
+  FileImage, Eye, X, Check, XCircle, Settings2
 } from 'lucide-react';
 
 type TemplateRow = Database['public']['Tables']['certificate_templates']['Row'];
 
 const PLACEHOLDER_KEYS_PESERTA = ['nama', 'no_sertifikat', 'qr_verifikasi'];
 const PLACEHOLDER_KEYS_PANITIA = ['nama', 'jabatan', 'ttd', 'no_sertifikat', 'qr_verifikasi'];
+
+/** Baca dimensi asli sebuah file gambar via Image() browser, tanpa upload dulu. */
+function getImageDimensions(file: File): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Gagal membaca dimensi gambar'));
+    };
+    img.src = url;
+  });
+}
 
 export function TemplateManagerPage() {
   const { eventId } = useParams();
@@ -95,9 +112,25 @@ export function TemplateManagerPage() {
 
     const defaultPlaceholders = Object.fromEntries(
       (recipientType === 'panitia' ? PLACEHOLDER_KEYS_PANITIA : PLACEHOLDER_KEYS_PESERTA).map((key, i) => [
-        key, { x: 400, y: 250 + i * 60, fontSize: 28, width: key === 'ttd' ? 150 : undefined },
+        key,
+        {
+          x: 400,
+          y: 250 + i * 60,
+          fontSize: 28,
+          width: key === 'ttd' || key === 'qr_verifikasi' ? 150 : undefined,
+          color: '#000000',
+          enabled: true,
+          align: 'left' as const,
+        },
       ])
     );
+
+    // Ambil dimensi ASLI gambar (bukan di-hardcode 1000x700) supaya PDF nanti
+    // dirender 1:1 sesuai rasio gambar yang diupload dosen -- gambar tidak
+    // gepeng/distorsi, dan koordinat placeholder di editor visual (task #7)
+    // konsisten dengan koordinat saat render PDF di server.
+    // Fallback ke 1000x700 kalau browser gagal membaca dimensi (jarang terjadi).
+    const dimensions = await getImageDimensions(selectedFile).catch(() => ({ width: 1000, height: 700 }));
 
     const { data, error } = await supabase.from('certificate_templates').insert({
       event_id: eventId,
@@ -106,6 +139,8 @@ export function TemplateManagerPage() {
       jabatan: recipientType === 'panitia' ? jabatan || null : null,
       file_path: path,
       placeholders: defaultPlaceholders,
+      page_width: dimensions.width,
+      page_height: dimensions.height,
     }).select().single();
 
     if (!error && data) {
@@ -125,14 +160,26 @@ export function TemplateManagerPage() {
     setTemplates((prev) => prev.filter((t) => t.id !== template.id));
   }
 
-  // Buka modal preview untuk template yang sudah terpasang
-  function openPreviewModal(t: TemplateRow) {
-    const { data } = supabase.storage.from('certificate-templates').getPublicUrl(t.file_path);
+  // Buka modal preview untuk template yang sudah terpasang.
+  // PENTING: bucket 'certificate-templates' bersifat PRIVATE (RLS aktif),
+  // jadi getPublicUrl() akan menghasilkan URL yang selalu gagal diakses
+  // (403). Harus pakai createSignedUrl() yang menghasilkan URL sementara
+  // dengan token akses, sesuai desain keamanan storage di migration 0001.
+  async function openPreviewModal(t: TemplateRow) {
+    const { data, error } = await supabase.storage
+      .from('certificate-templates')
+      .createSignedUrl(t.file_path, 60 * 10); // berlaku 10 menit, cukup untuk preview
+
+    if (error || !data) {
+      alert('Gagal memuat preview: ' + (error?.message ?? 'URL tidak tersedia'));
+      return;
+    }
+
     const title = t.recipient_type === 'peserta' 
       ? 'Sertifikat Peserta' 
       : `Sertifikat Panitia${t.jabatan ? ' — ' + t.jabatan : ' (Umum)'}`;
     
-    setPreviewModal({ url: data.publicUrl, title });
+    setPreviewModal({ url: data.signedUrl, title });
   }
 
   if (loading) return (
@@ -260,6 +307,12 @@ export function TemplateManagerPage() {
                   
                   {/* Tombol Aksi */}
                   <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <button
+                      onClick={() => navigate(`/dashboard/events/${eventId}/templates/${t.id}/editor`)}
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors shadow-sm"
+                    >
+                      <Settings2 className="w-4 h-4" /> Atur Posisi
+                    </button>
                     <button 
                       onClick={() => openPreviewModal(t)} 
                       className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors shadow-sm"

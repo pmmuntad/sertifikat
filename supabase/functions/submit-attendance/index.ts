@@ -4,6 +4,7 @@ import { cleanWhatsAppNumber, isValidWhatsAppNumber } from '../_shared/whatsapp.
 import { distanceInMeters } from '../_shared/geofence.ts';
 import { computeVerificationHash } from '../_shared/verificationHash.ts';
 import { renderCertificatePdf } from '../_shared/certificatePdf.ts';
+import { formatCertificateNumber } from '../_shared/certificateNumber.ts';
 
 interface SubmitPayload {
   event_id: string;
@@ -157,11 +158,24 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 7. Generate nomor sertifikat atomic per organisasi
-    const { data: certNumberResult } = await supabaseAdmin.rpc('next_certificate_number', {
-      p_organization_id: event.organization_id,
-    });
-    const certificateNumber: string = certNumberResult as string;
+    // 7. Generate nomor sertifikat (atomic per acara), sesuai pengaturan dosen:
+    //    - certificate_number_enabled = false -> nomor surat TIDAK dirender ke
+    //      PDF sama sekali (dosen sudah punya nomor baked-in di gambar
+    //      template). Kolom certificate_number di DB tetap wajib unik & NOT
+    //      NULL, jadi diisi placeholder internal "NONUM-{certificateId}"
+    //      (tidak pernah ditampilkan ke siapa pun, cuma untuk bookkeeping).
+    //    - true -> ambil urutan atomic lalu format sesuai certificate_number_format.
+    const certificateId = crypto.randomUUID();
+    let certificateNumber: string;
+    if (event.certificate_number_enabled) {
+      const { data: seqResult } = await supabaseAdmin.rpc('next_certificate_sequence', {
+        p_event_id: event_id,
+      });
+      const sequence = seqResult as number;
+      certificateNumber = formatCertificateNumber(event.certificate_number_format, sequence);
+    } else {
+      certificateNumber = `NONUM-${certificateId}`;
+    }
 
     // 8. Download gambar template dari storage untuk di-render jadi PDF
     const { data: templateFile, error: templateDownloadError } = await supabaseAdmin.storage
@@ -179,8 +193,9 @@ Deno.serve(async (req) => {
     const templateBytes = new Uint8Array(await templateFile.arrayBuffer());
     const isPng = template.file_path.toLowerCase().endsWith('.png');
 
-    // Placeholder id sertifikat sementara (dipakai untuk hash & URL verifikasi)
-    const certificateId = crypto.randomUUID();
+    // certificateId sudah dideklarasikan di langkah 7 (dipakai untuk fallback
+    // nomor unik saat certificate_number_enabled = false). Dipakai lagi di
+    // sini untuk hash & URL verifikasi.
     const appBaseUrl = Deno.env.get('APP_BASE_URL') ?? 'https://your-app.vercel.app';
     const verificationSecret = Deno.env.get('CERTIFICATE_VERIFICATION_SECRET') ?? 'change-me';
     const sig = await computeVerificationHash(certificateId, verificationSecret);
@@ -189,14 +204,16 @@ Deno.serve(async (req) => {
     const pdfBytes = await renderCertificatePdf({
       templateImageBytes: templateBytes,
       templateImageType: isPng ? 'png' : 'jpg',
-      placeholders: template.placeholders as Record<string, { x: number; y: number; fontSize?: number; width?: number }>,
+      placeholders: template.placeholders as Record<string, { x: number; y: number; fontSize?: number; width?: number; color?: string; enabled?: boolean; align?: 'left' | 'center' | 'right' }>,
       values: {
         nama: nama_lengkap,
-        no_sertifikat: certificateNumber,
+        // Kosongkan value kalau fitur nomor surat dimatikan, sehingga
+        // certificatePdf.ts otomatis skip rendering placeholder ini.
+        no_sertifikat: event.certificate_number_enabled ? certificateNumber : undefined,
         qr_verifikasi_url: verificationUrl,
       },
-      pageWidth: 1000,
-      pageHeight: 700,
+      pageWidth: template.page_width ?? 1000,
+      pageHeight: template.page_height ?? 700,
     });
 
     const certificateFilePath = `${event.organization_id}/${event_id}/${certificateId}.pdf`;
@@ -257,7 +274,9 @@ Deno.serve(async (req) => {
     return jsonResponse({
       success: true,
       message: 'Absensi berhasil dan sertifikat telah terbit.',
-      certificate_number: certificateNumber,
+      // Jangan bocorkan placeholder internal "NONUM-..." ke client kalau
+      // fitur nomor surat dimatikan oleh dosen.
+      certificate_number: event.certificate_number_enabled ? certificateNumber : null,
       certificate_url: signedUrlData?.signedUrl ?? null,
     });
   } catch (err) {

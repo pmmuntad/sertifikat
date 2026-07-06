@@ -7,6 +7,7 @@ import { EventCreatePage } from './pages/dashboard/EventCreatePage';
 import { EventDetailPage } from './pages/dashboard/EventDetailPage';
 import { FormBuilderPage } from './pages/dashboard/FormBuilderPage';
 import { TemplateManagerPage } from './pages/dashboard/TemplateManagerPage';
+import { TemplateEditorPage } from './pages/dashboard/TemplateEditorPage';
 import { CommitteeManagerPage } from './pages/dashboard/CommitteeManagerPage';
 import { LiveMonitorPage } from './pages/dashboard/LiveMonitorPage';
 import { ProjectorPage } from './pages/dashboard/ProjectorPage';
@@ -34,6 +35,7 @@ export function App() {
             <Route path="events/:eventId" element={<EventDetailPage />} />
             <Route path="events/:eventId/form-builder" element={<FormBuilderPage />} />
             <Route path="events/:eventId/templates" element={<TemplateManagerPage />} />
+            <Route path="events/:eventId/templates/:templateId/editor" element={<TemplateEditorPage />} />
             <Route path="events/:eventId/committee" element={<CommitteeManagerPage />} />
             <Route path="events/:eventId/monitor" element={<LiveMonitorPage />} />
             <Route path="events/:eventId/projector" element={<ProjectorPage />} />
