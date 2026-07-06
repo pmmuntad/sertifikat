@@ -90,20 +90,29 @@ Deno.serve(async (req) => {
     const templateBytes = new Uint8Array(await templateFile.arrayBuffer());
     const isPng = template.file_path.toLowerCase().endsWith('.png');
 
-    const pdfBytes = await renderCertificatePdf({
-      templateImageBytes: templateBytes,
-      templateImageType: isPng ? 'png' : 'jpg',
-      placeholders: template.placeholders as Record<string, { x: number; y: number; fontSize?: number; width?: number; color?: string; enabled?: boolean; align?: 'left' | 'center' | 'right' }>,
-      values: {
-        nama: member.nama_lengkap,
-        jabatan: member.jabatan,
-        no_sertifikat: event.certificate_number_enabled ? certificateNumber : undefined,
-        qr_verifikasi_url: verificationUrl,
-        ttd_image_bytes: ttdBytes,
-      },
-      pageWidth: template.page_width ?? 1000,
-      pageHeight: template.page_height ?? 700,
-    });
+    let pdfBytes: Uint8Array;
+    try {
+      pdfBytes = await renderCertificatePdf({
+        templateImageBytes: templateBytes,
+        templateImageType: isPng ? 'png' : 'jpg',
+        placeholders: template.placeholders as Record<string, { x: number; y: number; fontSize?: number; width?: number; color?: string; enabled?: boolean; align?: 'left' | 'center' | 'right' }>,
+        values: {
+          nama: member.nama_lengkap,
+          jabatan: member.jabatan,
+          no_sertifikat: event.certificate_number_enabled ? certificateNumber : undefined,
+          qr_verifikasi_url: verificationUrl,
+          ttd_image_bytes: ttdBytes,
+        },
+        pageWidth: template.page_width ?? 1000,
+        pageHeight: template.page_height ?? 700,
+      });
+    } catch (renderErr) {
+      console.error('Gagal render PDF sertifikat panitia', committee_member_id, ':', renderErr);
+      return jsonResponse({
+        success: false,
+        message: 'Gagal membuat file PDF sertifikat. Kemungkinan template rusak atau ada karakter tidak didukung pada data panitia.',
+      }, 500);
+    }
 
     const filePath = `${event.organization_id}/${member.event_id}/${certificateId}.pdf`;
     const { error: uploadError } = await supabaseAdmin.storage

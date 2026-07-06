@@ -49,6 +49,7 @@ export function TemplateManagerPage() {
 
   // State untuk Modal Preview (Template terpasang)
   const [previewModal, setPreviewModal] = useState<{ url: string; title: string } | null>(null);
+  const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!eventId) return;
@@ -161,25 +162,32 @@ export function TemplateManagerPage() {
   }
 
   // Buka modal preview untuk template yang sudah terpasang.
-  // PENTING: bucket 'certificate-templates' bersifat PRIVATE (RLS aktif),
-  // jadi getPublicUrl() akan menghasilkan URL yang selalu gagal diakses
-  // (403). Harus pakai createSignedUrl() yang menghasilkan URL sementara
-  // dengan token akses, sesuai desain keamanan storage di migration 0001.
+  // PENTING: preview ini menampilkan HASIL AKHIR PDF ASLI (bukan gambar
+  // template mentah) -- dirender oleh Edge Function `preview-certificate`
+  // yang memakai fungsi render yang SAMA PERSIS dengan yang dipakai saat
+  // sertifikat asli diterbitkan (renderCertificatePdf di
+  // supabase/functions/_shared/certificatePdf.ts). Jadi apa yang terlihat
+  // di sini 100% mencerminkan hasil akhir (font, posisi, warna, QR nyata).
   async function openPreviewModal(t: TemplateRow) {
-    const { data, error } = await supabase.storage
-      .from('certificate-templates')
-      .createSignedUrl(t.file_path, 60 * 10); // berlaku 10 menit, cukup untuk preview
+    setPreviewLoadingId(t.id);
 
-    if (error || !data) {
-      alert('Gagal memuat preview: ' + (error?.message ?? 'URL tidak tersedia'));
+    const { data, error } = await supabase.functions.invoke('preview-certificate', {
+      body: { template_id: t.id },
+    });
+
+    setPreviewLoadingId(null);
+
+    if (error || !data?.success) {
+      alert('Gagal membuat preview: ' + (data?.message ?? error?.message ?? 'Terjadi kesalahan.'));
       return;
     }
 
     const title = t.recipient_type === 'peserta' 
       ? 'Sertifikat Peserta' 
       : `Sertifikat Panitia${t.jabatan ? ' — ' + t.jabatan : ' (Umum)'}`;
-    
-    setPreviewModal({ url: data.signedUrl, title });
+
+    const pdfDataUrl = `data:application/pdf;base64,${data.pdf_base64}`;
+    setPreviewModal({ url: pdfDataUrl, title });
   }
 
   if (loading) return (
@@ -315,9 +323,11 @@ export function TemplateManagerPage() {
                     </button>
                     <button 
                       onClick={() => openPreviewModal(t)} 
-                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors shadow-sm"
+                      disabled={previewLoadingId === t.id}
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors shadow-sm disabled:opacity-60"
                     >
-                      <Eye className="w-4 h-4" /> Preview
+                      {previewLoadingId === t.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+                      Preview
                     </button>
                     <button 
                       onClick={() => removeTemplate(t)} 
@@ -350,12 +360,12 @@ export function TemplateManagerPage() {
               </button>
             </div>
             
-            {/* Body Modal (Gambar) */}
+            {/* Body Modal (PDF hasil render server, WYSIWYG dengan hasil akhir asli) */}
             <div className="flex-1 overflow-auto p-4 sm:p-6 flex items-center justify-center bg-slate-100/50">
-              <img 
-                src={previewModal.url} 
-                alt={previewModal.title} 
-                className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-sm border border-slate-200"
+              <iframe
+                src={previewModal.url}
+                title={previewModal.title}
+                className="h-[70vh] w-full rounded-lg border border-slate-200 bg-white shadow-sm"
               />
             </div>
           </div>

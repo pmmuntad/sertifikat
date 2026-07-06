@@ -13,6 +13,8 @@ import {
   Hash,
   Signature,
   Briefcase,
+  FileSearch,
+  X,
 } from 'lucide-react';
 
 type TemplateRow = Database['public']['Tables']['certificate_templates']['Row'];
@@ -64,6 +66,8 @@ export function TemplateEditorPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedKey, setSelectedKey] = useState<PlaceholderKey | null>(null);
+  const [previewingPdf, setPreviewingPdf] = useState(false);
+  const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const [canvasWidth, setCanvasWidth] = useState(0);
@@ -179,6 +183,30 @@ export function TemplateEditorPage() {
     }
   }
 
+  /**
+   * Render PDF ASLI (bukan simulasi HTML) menggunakan posisi placeholder
+   * yang SEDANG diedit saat ini -- BELUM disimpan ke database. Ini memberi
+   * dosen preview WYSIWYG sebelum memutuskan klik "Simpan Posisi", memakai
+   * fungsi render server yang sama persis dengan sertifikat asli.
+   */
+  async function handlePreviewFinal() {
+    if (!templateId) return;
+    setPreviewingPdf(true);
+
+    const { data, error } = await supabase.functions.invoke('preview-certificate', {
+      body: { template_id: templateId, placeholders_override: placeholders },
+    });
+
+    setPreviewingPdf(false);
+
+    if (error || !data?.success) {
+      alert('Gagal membuat preview: ' + (data?.message ?? error?.message ?? 'Terjadi kesalahan.'));
+      return;
+    }
+
+    setPreviewPdfUrl(`data:application/pdf;base64,${data.pdf_base64}`);
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -213,14 +241,25 @@ export function TemplateEditorPage() {
           <ArrowLeft className="h-4 w-4" /> Kembali
         </button>
 
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          {saving ? 'Menyimpan...' : 'Simpan Posisi'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handlePreviewFinal}
+            disabled={previewingPdf}
+            className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-700 shadow-sm transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {previewingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSearch className="h-4 w-4" />}
+            {previewingPdf ? 'Membuat...' : 'Preview Hasil Akhir'}
+          </button>
+
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {saving ? 'Menyimpan...' : 'Simpan Posisi'}
+          </button>
+        </div>
       </div>
 
       <div>
@@ -408,11 +447,32 @@ export function TemplateEditorPage() {
           )}
 
           <p className="rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-800">
-            Tampilan di sini adalah perkiraan visual. Hasil akhir PDF sertifikat mungkin sedikit
-            berbeda tergantung font yang dipakai server.
+            Tampilan di canvas ini adalah perkiraan visual untuk drag posisi. Klik{' '}
+            <strong>"Preview Hasil Akhir"</strong> untuk melihat rendering PDF yang sesungguhnya
+            (sama persis dengan yang diterima peserta) sebelum menyimpan.
           </p>
         </div>
       </div>
+
+      {/* Modal Preview PDF Hasil Akhir (WYSIWYG, render server) */}
+      {previewPdfUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 p-4 backdrop-blur-sm">
+          <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-5 py-4">
+              <h3 className="text-base font-semibold text-gray-900">Preview Hasil Akhir (PDF Asli)</h3>
+              <button
+                onClick={() => setPreviewPdfUrl(null)}
+                className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-200 hover:text-gray-800"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 bg-gray-100 p-4">
+              <iframe src={previewPdfUrl} title="Preview PDF" className="h-full min-h-[60vh] w-full rounded-lg border border-gray-200 bg-white" />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
